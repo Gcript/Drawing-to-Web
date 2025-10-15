@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>드래그로 도형 그리기 + 코드 실시간 생성</title>
+  <link rel="stylesheet" href="styles.css" />
+  <script src="./app.js" defer></script>
+</head>
+<body>
+  <div class="app"><!-- .code-open 이 붙으면 우측 코드 패널 열림 -->
+    <header>
+      <h1>드래그로 도형 그리기 → HTML/CSS/JS 코드 자동 생성</h1>
+      <div class="hint">아트보드에서 클릭-드래그하세요. (Shift = 정사각형/정원 고정)</div>
+    </header>
+
+    <main>
+      <!-- Left: Toolbar -->
+      <aside class="panel toolbar" aria-label="도구">
+        <div class="group">
+          <strong>도형 옵션</strong>
+          <div class="row">
+            <label for="shapeType">타입</label>
+            <select id="shapeType">
+              <option value="rect">사각형</option>
+              <option value="ellipse">타원</option>
+            </select>
+          </div>
+          <div class="row">
+            <label for="fill">채우기 색</label>
+            <input id="fill" type="color" value="#60a5fa" />
+          </div>
+          <div class="row">
+            <label for="stroke">테두리 색</label>
+            <input id="stroke" type="color" value="#1f2937" />
+          </div>
+          <div class="row">
+            <label for="strokeW">테두리 두께(px)</label>
+            <input id="strokeW" type="number" value="2" min="0" max="20" />
+          </div>
+          <div class="row" id="radiusRow">
+            <label for="radius">모서리 반경(px)</label>
+            <input id="radius" type="number" value="10" min="0" max="200" />
+          </div>
+          <div class="row">
+            <button id="clearBtn" class="btn ghost">모두 지우기</button>
+            <button id="downloadBtn" class="btn primary">HTML 저장</button>
+          </div>
+          <div class="tips">좌표/크기 단위: px (기준: 아트보드 좌측 상단)</div>
+        </div>
+
+        <div class="group">
+          <strong>도형 리스트</strong>
+          <div class="list">
+            <table>
+              <thead>
+                <tr>
+                  <th>#</th><th>타입</th><th>L</th><th>T</th><th>W</th><th>H</th>
+                  <th>Fill</th><th>Stroke</th><th>SW</th><th>R</th><th>Actions</th>
+                </tr>
+              </thead>
+              <tbody id="shapeRows"></tbody>
+            </table>
+          </div>
+        </div>
+      </aside>
+
+      <!-- Middle: Artboard + Frame Picker -->
+      <section class="stage">
+        <div class="topbar">
+          <div class="hint">프레임을 선택하면 아트보드 크기가 해당 해상도로 바뀝니다.</div>
+          <div class="framepicker">
+            <label for="frameSelect">Frame</label>
+            <select id="frameSelect" title="디바이스 프레임 선택">
+              <optgroup label="iPhone">
+                <option value="iphone16">iPhone 16 — 393×852</option>
+                <option value="iphone16pro">iPhone 16 Pro — 402×874</option>
+                <option value="iphone16promax">iPhone 16 Pro Max — 440×956</option>
+                <option value="iphone16plus">iPhone 16 Plus — 430×932</option>
+                <option value="iphone1415promax">iPhone 14 & 15 Pro Max — 430×932</option>
+                <option value="iphone1415pro">iPhone 14 & 15 Pro — 393×852</option>
+                <option value="iphone1314">iPhone 13 & 14 — 390×844</option>
+              </optgroup>
+              <optgroup label="Mac / Desktop">
+                <option value="mba">MacBook Air — 1280×832</option>
+                <option value="mbp14">MacBook Pro 14&quot; — 1512×982</option>
+                <option value="mbp16">MacBook Pro 16&quot; — 1728×1117</option>
+                <option value="desktop1440">Desktop — 1440×1024</option>
+              </optgroup>
+            </select>
+            <span id="frameInfo" class="frameinfo">—</span>
+          </div>
+        </div>
+
+        <div id="artboard-wrap" class="panel">
+          <div id="artboard" aria-label="그리기 영역"></div>
+        </div>
+      </section>
+
+      <!-- Right: Code preview (기본 숨김) -->
+      <aside class="panel codepane" aria-label="코드" aria-hidden="true">
+        <div class="codepane-header">
+          <div class="title">&lt;Code/&gt;</div>
+          <button id="closeCode" class="icon-btn" aria-label="코드 패널 닫기">✕</button>
+        </div>
+        <div class="tabs">
+          <div class="tab active" data-tab="single">Single-file (index.html)</div>
+          <div class="tab" data-tab="html">HTML</div>
+          <div class="tab" data-tab="css">CSS</div>
+          <div class="tab" data-tab="js">JS</div>
+        </div>
+        <div class="codebox">
+          <pre><code id="codeOut"></code></pre>
+        </div>
+        <div class="code-actions">
+          <button id="copyBtn" class="btn">코드 복사</button>
+        </div>
+      </aside>
+    </main>
+  </div>
+
+  <!-- 속성 편집 모달 (생략 없이 이전 버전 그대로) -->
+  <div id="editorModal" class="modal hidden" aria-hidden="true" role="dialog" aria-modal="true">
+    <div class="modal-backdrop" data-close="1"></div>
+    <div class="modal-panel" role="document" aria-labelledby="editorTitle">
+      <div class="modal-header">
+        <h2 id="editorTitle">도형 속성 변경</h2>
+        <button class="icon-btn" id="editorClose" aria-label="닫기">✕</button>
+      </div>
+      <div class="modal-body">
+        <div class="form-grid">
+          <label>타입
+            <select id="ed_type">
+              <option value="rect">사각형</option>
+              <option value="ellipse">타원</option>
+            </select>
+          </label>
+          <label>L (x) <input id="ed_x" type="number" min="0" step="1"></label>
+          <label>T (y) <input id="ed_y" type="number" min="0" step="1"></label>
+          <label>W <input id="ed_w" type="number" min="1" step="1"></label>
+          <label>H <input id="ed_h" type="number" min="1" step="1"></label>
+          <label>Fill <input id="ed_fill" type="color"></label>
+          <label>Stroke <input id="ed_stroke" type="color"></label>
+          <label>SW (px)
+            <input id="ed_sw" type="range" min="0" max="20" step="1">
+            <input id="ed_sw_num" type="number" min="0" max="20" step="1">
+          </label>
+          <label>Radius (px)
+            <input id="ed_radius" type="range" min="0" max="200" step="1">
+            <input id="ed_radius_num" type="number" min="0" max="200" step="1">
+          </label>
+        </div>
+
+        <div class="preview-wrap">
+          <div class="preview-title">미리보기</div>
+          <div class="preview-stage">
+            <div id="previewShape"></div>
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn ghost" id="editorCancel">취소</button>
+        <button class="btn primary" id="editorApply">적용</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 우하단 플로팅 코드 버튼 -->
+  <button id="toggleCode" class="fab fab-code" aria-controls="codepane" aria-pressed="false" title="코드 보기">
+    &lt;Code/&gt;
+  </button>
+</body>
+</html>
